@@ -69,6 +69,24 @@ test('proxy injects HTML and preserves cookies and JSON',async t=>{
  const upstream=await start(t,backend);const {server}=createGateway({upstream});const base=await start(t,server);
  const result=await fetch(base+'/');const html=await result.text();assert.match(html,/data-dygk/);assert.equal(Number(result.headers.get('content-length')),Buffer.byteLength(html));assert.match(result.headers.get('set-cookie'),/sample=1/);assert.deepEqual(await(await fetch(base+'/json')).json(),{});
 });
+test('proxy preserves oversized HTML through a slow reader',async t=>{
+ const body='<html><body>'+ '归档记录'.repeat(200000)+'</body></html>';
+ const backend=http.createServer((req,res)=>{
+  res.writeHead(200,{'content-type':'text/html; charset=utf-8','content-length':Buffer.byteLength(body),etag:'"original"'});
+  res.end(body);
+ });
+ const upstream=await start(t,backend);const {server}=createGateway({upstream});const base=await start(t,server);
+ const received=await new Promise((resolve,reject)=>{
+  http.get(base,res=>{
+   assert.equal(res.headers.etag,'"original"');
+   const chunks=[];
+   res.on('data',chunk=>{chunks.push(chunk);res.pause();setTimeout(()=>res.resume(),1);});
+   res.on('end',()=>resolve(Buffer.concat(chunks).toString('utf8')));
+   res.on('error',reject);
+  }).on('error',reject);
+ });
+ assert.equal(received,body);
+});
 test('concurrent confirmation advances once; foreign IP cannot reuse session',async t=>{
  const defense=createDefense({trustedProxies:['127.0.0.1'],mode:'observe'});
  const server=http.createServer(async(req,res)=>{if(!await defense.handle(req,res))res.end('ok');});const base=await start(t,server);t.after(()=>defense.close());
