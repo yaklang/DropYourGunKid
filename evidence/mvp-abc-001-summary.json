@@ -1,0 +1,7 @@
+{
+  "study": "mvp-abc-001",
+  "valid": false,
+  "model_calls": 0,
+  "reason": "Docker FROM裸sha256被解释为远端镜像引用，三条件均构建失败",
+  "action": "保留原计划和失败日志；修正本地标签并新增就绪检查，另建批次，不改模板"
+}

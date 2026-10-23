@@ -1,0 +1,48 @@
+{
+  "name": "@dygk/core",
+  "version": "0.1.0",
+  "description": "Bounded web deception and honeypot interactions for self-hosted sites",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "license": "UNLICENSED",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./server": {
+      "types": "./lib/server.d.ts",
+      "default": "./lib/server.js"
+    },
+    "./browser": {
+      "types": "./lib/browser.d.ts",
+      "default": "./lib/browser.js"
+    }
+  },
+  "bin": {
+    "dygk": "./bin/dygk.js"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "typecheck": "tsc --noEmit -p tests/tsconfig.json",
+    "demo": "node examples/operations/server.js",
+    "test:browser": "node tests/browser.mjs",
+    "pack:check": "npm pack --dry-run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZacharyZcR/DropYourGunKid.git"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}

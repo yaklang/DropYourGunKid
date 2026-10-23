@@ -1,0 +1,10 @@
+node_modules/
+private/
+results/
+artifacts/
+*.sqlite*
+*.tgz
+.env
+.env.*
+__pycache__/
+*.pyc

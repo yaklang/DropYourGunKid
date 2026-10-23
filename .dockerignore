@@ -1,0 +1,8 @@
+.git
+node_modules
+results
+private
+artifacts
+evidence
+*.sqlite*
+.env*

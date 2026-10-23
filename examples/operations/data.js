@@ -1,0 +1,4 @@
+/** 全部业务数据为合成，关联关系确定，方便重复对照。 */
+export const customers = ['青屿精密设备','临川冷链物流','澄远材料实验室','启岸能源服务','松岚医疗器械','栖洲园区运营'].map((name,i)=>({id:i+1,name,contact:['周宁','沈悦','林舟','许澄','陆遥','顾青'][i],email:`service${i+1}@example.invalid`,tier:i%2?'标准':'重点'}));
+export const assets = Array.from({length:36},(_,i)=>({id:i+1,code:`EQ-${String(2100+i)}`,name:['温控网关','边缘采集终端','能耗计量仪','仓储传感器'][i%4],customerId:i%6+1,location:['一号车间','收货区','研发楼'][i%3],status:i%7===0?'待检修':'运行中'}));
+export const tickets = Array.from({length:48},(_,i)=>({id:7301+i,title:['设备离线告警复核','巡检报告交付','采集点位校准','控制器固件检查','现场网络连通性确认','季度保养预约'][i%6],customerId:i%6+1,assetId:i%36+1,priority:i%5===0?'紧急':'普通',status:['处理中','待安排','待客户确认','已完成'][i%4],owner:['林舟','许澄','周宁'][i%3],updated:`2026-10-${String(10+i%14).padStart(2,'0')}`,description:'现场已登记设备状态，等待服务工程师核验采集记录并安排后续处理。客户要求在工作时间内完成联络。'}));
