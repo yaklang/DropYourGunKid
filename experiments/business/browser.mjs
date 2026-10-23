@@ -1,0 +1,53 @@
+import { chromium, expect } from '@playwright/test';
+import { readFileSync, writeFileSync } from 'node:fs';
+const [base,output]=process.argv.slice(2);
+const fixture=JSON.parse(readFileSync('results/business-preflight/fixture.json','utf8'));
+const browser=await chromium.launch({headless:true,args:['--no-proxy-server'],
+  env:Object.fromEntries(Object.entries(process.env).filter(([key])=>!['http_proxy','https_proxy','all_proxy'].includes(key.toLowerCase())))});
+const page=await browser.newPage({viewport:{width:1366,height:900}});
+const errors=[],failures=[],checks=[];
+page.on('pageerror',error=>errors.push(error.message));
+page.on('response',response=>{if(response.status()>=400)failures.push({url:response.url(),status:response.status()});});
+await page.route('**/*',route=>new URL(route.request().url()).origin===new URL(base).origin?route.continue():route.abort());
+try {
+  const response=await page.goto(base,{waitUntil:'networkidle'});
+  if(response.status()>=400)throw new Error('Page failed: '+response.status()+' '+await response.text());
+  writeFileSync(output+'/initial.txt',await page.locator('body').innerText());
+  await page.screenshot({path:output+'/initial.png'});
+  checks.push('signin_page');
+  await page.getByTestId('nc-form-signin__email').fill(fixture.target.email);
+  await page.getByTestId('nc-form-signin__password').fill(fixture.target.password);
+  await page.getByTestId('nc-form-signin__submit').click();
+  await page.getByText('Operations',{exact:true}).first().waitFor();
+  await page.getByText('Operations',{exact:true}).first().click();
+  await page.getByText('WorkOrders',{exact:true}).first().click();
+  await page.getByText('Maintenance order 01',{exact:true}).first().waitFor();
+  await page.screenshot({path:output+'/records.png'});
+  checks.push('login','project_navigation','record_list');
+  await page.locator('.ant-pagination-item-2').click();
+  await page.getByText('Maintenance order 26',{exact:true}).first().waitFor();
+  await page.locator('.ant-pagination-item-1').click();
+  await page.getByText('Maintenance order 01',{exact:true}).first().waitFor();
+  checks.push('pagination');
+  const search=page.getByTestId('search-data-input');
+  await search.fill('Maintenance order 03');await search.press('Enter');
+  await expect(page.getByTestId('grid-pagination')).toHaveText('1 record');
+  await page.getByText('Maintenance order 03',{exact:true}).first().waitFor();
+  checks.push('search');
+  await page.getByTestId('grid-row-0').hover();
+  await page.getByTestId('nc-expand-0').locator('.nc-row-expand').click();
+  await page.locator('.nc-expanded-form-header').waitFor();
+  await page.screenshot({path:output+'/detail.png'});
+  checks.push('record_detail');
+  await page.keyboard.press('Escape');
+  await page.goto(base,{waitUntil:'networkidle'});
+  await page.getByTestId('nc-menu-accounts').click();
+  await page.locator('.nc-project-menu-item',{hasText:'Sign Out'}).last().click();
+  await page.getByTestId('nc-form-signin__email').waitFor();
+  checks.push('logout');
+  expect(errors).toEqual([]);
+  console.log('Browser checks:',checks.join(', '));
+} finally {
+  writeFileSync(output+'/browser-errors.json',JSON.stringify({checks,errors,failures},null,2));
+  await browser.close();
+}

@@ -137,3 +137,7 @@ createDefense({ mode: 'observe', entries: 8, branches: 8, depth: 4, maxNodes: 40
 ## 当前实验汇总
 
 [研究报告](docs/research-report.md)：十种选定框架接入均取得一组满足当前判据的配对案例，无防御成功登录，完整防御未登录且封禁或预算耗尽（10/10案例覆盖）。包含补测与预算调整，不是统一基准成功率。历史失败与适配限制均在报告中列出。
+
+## 真实业务应用前后对照
+
+[三轮执行记录](docs/real-business-results.md)：NocoDB 0.109.7 隔离副本，BoxPwnr + deepseek-flash。第三轮在修复协议、代理和默认弱账户后，off 取得受保护记录，block 被诱饵提交封禁且未取得目标，按预注册封禁链判据为防御成功。单次探索，不提供稳定成功率；block 末尾的模型 Token 预算标签异常单独记录。执行前设计见[计划](docs/plans/real-business-ab.md)。

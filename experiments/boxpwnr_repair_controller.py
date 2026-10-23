@@ -1,5 +1,5 @@
-"""BoxPwnr 原生 XML solver；模型命令仅进入受限容器。"""
-import os, sys, json, pathlib, threading, importlib.util
+"""BoxPwnr native XML solver with bounded protocol repair; commands stay in the sandbox."""
+import os, sys, json, pathlib, subprocess, threading, importlib.util
 root=pathlib.Path(os.environ.get('DYGK_RESEARCH_ROOT','/home/Kei/ai-pentest-countermeasures'))
 sys.path.insert(0,str(root/'scripts'))
 import run_db_autonomy as box
@@ -8,14 +8,32 @@ for key in ('ALL_PROXY','all_proxy','HTTP_PROXY','http_proxy','HTTPS_PROXY','htt
     os.environ.pop(key,None)
 os.environ['NO_PROXY']='127.0.0.1,localhost'
 container,out=sys.argv[1],pathlib.Path(sys.argv[2])
+gateway=sys.argv[3] if len(sys.argv)>3 else None
 os.environ['DECOY_EVAL_ROOT']=str(root/'private/boxpwnr-model-compare')
 spec=importlib.util.spec_from_file_location('resource_ev',root/'validation/ssh-decoy/evaluate.py')
 ev=importlib.util.module_from_spec(spec);spec.loader.exec_module(ev)
 trace=[]
+
+def execute(container, command):
+    """Run in the agent container with host proxy variables removed."""
+    return ev.execute(container, 'unset ALL_PROXY all_proxy HTTP_PROXY http_proxy HTTPS_PROXY https_proxy; ' + command)
+
+def budget_hit():
+    """Stop at the gateway or model budget instead of consuming the remaining turns."""
+    status = out / 'budget-status.json'
+    if status.exists():
+        reason = json.loads(status.read_text()).get('reason')
+        if reason:return reason
+    if not gateway:return None
+    for kind in ('http_budget','password_budget'):
+        check=subprocess.run(['docker','exec',gateway,'sh','-c',f'grep -q \'"kind":"{kind}"\' /tmp/events.jsonl'],capture_output=True)
+        if check.returncode==0:return kind
+    return None
+
 relay=ResourceRelay(ev.load_provider('deepseek-official','deepseek-flash'),trace,out/'model.jsonl')
 threading.Thread(target=relay.serve_forever,daemon=True).start()
 def assess(ev, url, client, trace):
-    """沿用框架提示与解析，不提供预先探测输出或安装指令。"""
+    """Native prompt and parser; no pre-probe output or install instructions."""
     import yaml
     from jinja2 import Template
     from langchain_openai import ChatOpenAI
@@ -32,6 +50,12 @@ def assess(ev, url, client, trace):
         def _extract_text_content(self, response):
             return box.normalize_dsml(super()._extract_text_content(response))
 
+        def _should_retry_limited(self, e):
+            return False if 'budget' in str(e).lower() else super()._should_retry_limited(e)
+
+        def _should_retry_infinite(self, e):
+            return False if 'budget' in str(e).lower() else super()._should_retry_infinite(e)
+
     module.LLMManager = Manager
     solver = module.SingleLoopXmltagSolver("ollama:/model", reasoning_effort="disabled")
     prompts = ev.LAB / "BoxPwnr/src/boxpwnr/prompts"
@@ -47,9 +71,12 @@ def assess(ev, url, client, trace):
     repairs = 0
     from langchain_core.messages import HumanMessage
     for turn in range(1, 41):
-        action = solver.get_next_action()
+        try:
+            action = solver.get_next_action()
+        except Exception as exc:
+            return 'model_call_budget' if 'budget' in str(exc).lower() else 'model_error'
         trace.append({"turn": turn, "action_type": action.type, "content": action.content})
-        if action.type == "none" and any(tag in action.content for tag in ("DSML", "<COMMAND", "</COMMAND>")):
+        if action.type == "none" and any(tag in (action.content or '') for tag in ("DSML", "<COMMAND", "</COMMAND>")):
             if repairs >= 2:
                 return "protocol_error"
             repairs += 1
@@ -64,9 +91,11 @@ def assess(ev, url, client, trace):
             return "protocol_error"
         if action.type != "command":
             return "agent_stopped"
-        result = ev.execute(client, action.content)
+        result = execute(client, action.content)
         trace.append({"turn": turn, "execution": result})
         solver.handle_result(result)
+        hit = budget_hit()
+        if hit: return hit
     return "turn_budget"
 
 try:
