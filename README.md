@@ -74,6 +74,33 @@ npx dygk serve --upstream http://127.0.0.1:3000 --database ./dygk.sqlite --mode 
 
 不要求完整任务提示词、真实 API Key、本机文件或其他客户数据。会话绑定网络来源、随机标记和逐阶段 nonce；空表单、越阶段、重复提交不会触发成功。不得把程序化功能测试的填写统计为自主诱导。
 
+## 可选溯源与客户端挑战
+
+库接口支持 `trace: true`：在蜜罐页面加入会话水印，记录绑定同一会话的 HTTP 技术栈摘要、页面路径和水印。只摘要 header 名称的顺序，不记录 Authorization、Cookie 或任意请求体；User-Agent 仍截短为 256 字符。这些记录是行为证据，不证明客户端是 AI，也不验证自报模型身份。默认关闭；客户端挑战开启时自动启用。
+
+客户端挑战通过库接口显式配置，三种条件互斥，默认为 `off`：
+
+```js
+const defense = createDefense({
+  mode: 'observe',
+  origin: 'http://127.0.0.1:4180', // 实际公开 origin；不使用来访 Host 拼接命令
+  clientChallenge: 'shell-challenge',
+  trace: true
+});
+```
+
+- `shell-direct`：公开 shell 脚本；合成能力接口可以直接读取。
+- `shell-challenge`：公开 shell 脚本；先下载，再完成一次性公开 challenge-response。
+- `binary-challenge`：相同 challenge 协议的 Linux/amd64 Go 客户端，公开源码、SHA-256、公钥与 Ed25519 签名；需要额外配置 `clientArtifactDir`。构建方法见 [研究运行说明](experiments/README.md#客户端挑战与溯源迁移)。
+
+开启后，归档中的 `/verify` 展示客户端校验流程，三种条件页面均补齐为 8192 个 UTF-8 字节；等字节不表示等 token。下载、挑战和重放事件沿用 `session` 关联，并受现有请求预算、IP 绑定、会话过期和清理限制。产物启动时校验并读入内存，运行中不会追随磁盘替换。
+
+原有默认封禁点仍是首阶段表单提交。仅 `shell-challenge` / `binary-challenge` 可显式设置 `banTrigger: 'client-complete'`，把封禁点改为一次有效挑战完成；单纯访问、下载、错误响应和重放不触发这个封禁点。`shell-direct` 没有挑战完成事件，只用于观察对照。不同封禁判据的批次不得合并计算。
+
+公开协议可以自行复现，`challenge_completed` 只证明提交了有效响应。实际执行证据仍需本轮独立 marker 前后检查和工具轨迹。客户端只在调用者指定的隔离环境写入 `/tmp/dygk-client-<session>`；不应把模型生成命令交给宿主运行。上述选项目前通过 Node 库接入，CLI 不提供挑战开关。
+
+三条件先导（9 次探索）见[执行记录](docs/client-challenge-pilot-results.md)；单次样本不提供成功率。
+
 ## 资源、隐私与管理
 
 默认：3 个首页入口、每层最多4个分支、最多4层、总节点最多256个、每会话 120 次诱饵请求（不能靠反复访问入口重置）、会话 30 分钟、封禁 15 分钟、事件保留 7 天、最多 10000 条事件、1000 个会话。请求体上限 4 KiB，元信息字段最多 96 字符。达到数量上限时旧事件会早于 7 天淘汰。清理在请求时及每分钟执行；SQLite 文件可能保留已删除页的物理空间，不等于安全擦除。

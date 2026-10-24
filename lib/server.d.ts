@@ -2,6 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { InjectionOptions } from './index.js';
 export interface Event { ts:number; kind:string; ip:string; session:string; data:Record<string,unknown> }
 export interface DefenseOptions extends InjectionOptions {
+ trace?:boolean; clientChallenge?:'off'|'shell-direct'|'shell-challenge'|'binary-challenge';
+ clientArtifactDir?:string; banTrigger?:'profile'|'client-complete';
  mode?: 'off'|'observe'|'block'; database?:string; branches?:number; depth?:number; maxNodes?:number; requestLimit?:number;
  sessionTTL?:number; banTTL?:number; retentionDays?:number; maxEvents?:number; maxSessions?:number;
  trustedProxies?:string[]; clock?:()=>number; onEvent?:(event:Event)=>void;

@@ -1,5 +1,79 @@
 # 隔离 A/B/C 实验
 
+## 客户端挑战与溯源迁移
+
+迁入 `ai-pentest-countermeasures` PR #3/#4 中适用于 Web 的能力：会话页面/下载水印、HTTP 指纹关联、公开客户端三条件、签名产物、一次性挑战和离线对齐。SSH 指纹、SSH 多端口令牌链及延时回访未迁入。库默认行为和历史批次判据保持原样；新增实验不要复用旧数据库或旧 study。
+
+原项目离线工具的格式问题在 DYGK 适配中处理：`ts` 毫秒转秒、兼容 ISO `time`，指纹绑定 `session`，下载事件和工具日志统一使用完整 `DYGK-DL-<nonce>`，双侧都出现才进入 `pairs`。同一次请求的多个事件不算多次请求；间隔只从 `http_fingerprint` 提取，不推断模型型号。
+
+构建一次研究产物（需要 Go；只编译和签名，不运行客户端）：
+
+```sh
+node experiments/build-client.mjs artifacts/client-study-NEW
+```
+
+构建器拒绝覆盖已有目录，生成 Linux/amd64 静态二进制、源码、公钥、签名和哈希清单；Ed25519 私钥只留在构建进程内存。产物目录不进入 Git 或 NPM 包。目标启动时会验证全部产物哈希和二进制签名。二进制使用和 shell 相同的公开协议，不提供隐藏能力。
+
+目标通过 `createDefense` 或 `createGateway` 传入以下选项：
+
+```js
+{
+  mode: 'observe',
+  origin: 'http://target.lab:18092',
+  trace: true,
+  clientChallenge: 'binary-challenge',
+  clientArtifactDir: '/app/client-artifacts'
+}
+```
+
+研究容器中的产物应在构建时复制进入镜像，执行器继续保持无宿主挂载、无外网和普通用户。下载、读取源码、公钥和 challenge 都消耗既有会话请求预算。所有下载端点先验证 session/IP，重放只有一次成功。三条件页面固定 8192 字节，源码与验证步骤不同、token 数仍需实测，不能声称只有载体形式一个变量。
+
+`shell-direct` 可直接读取 `/client/capabilities`，无 challenge 完成事件；challenge 两组须先下载再提交有效响应。比较客户端行为时统一使用 `observe`。若研究封禁效果，另建批次并显式使用 `banTrigger: 'client-complete'`（仅支持两种 challenge 条件）；该事件仍不证明运行了下载文件。
+
+冻结工具只生成计划和随机顺序，不自动调用模型、不自动调度旧 A/B/C 运行器。`--task-file` 是本批次普通任务原文；provider 配置仅写入路径和哈希，不复制凭据。镜像必须已在本地，框架 checkout 必须干净。
+
+```sh
+python3 experiments/prepare_client_study.py \
+  --output results/client-study-NEW/plan.json \
+  --provider research --provider-config /path/to/providers.local.json \
+  --task-file /path/to/task.txt --model MODEL_ID \
+  --framework boxpwnr=/path/to/BoxPwnr \
+  --image target=DYGK_TARGET_IMAGE --image executor=EXECUTOR_IMAGE \
+  --artifact-dir artifacts/client-study-NEW --repeats 15
+
+python3 experiments/prepare_client_study.py --verify results/client-study-NEW/plan.json
+```
+
+计划冻结源码、框架 commit、镜像 ID、Node/Python 版本、任务哈希、产物和预算。每个试次必须使用全新会话/数据库及隔离网络，执行前运行 `--verify`，并把计划哈希和试次编号写进结果。不要把旧运行器的 `off/observe/block` 三组结果当作这个三条件计划的执行结果。
+
+已补充独立的 `run_client_trial.py` 先导入口，仅支持 BoxPwnr/官方 DeepSeek Flash、480 秒/40 次调用/1000000 token 的固定预算。默认只验证计划和本地凭据来源，只有 `--run --trial N` 才调用模型；不能把旧 A/B/C 运行器当作新条件调度器。它从外部独立检查 marker 并保留工具轨迹，仍需人工判断是否确实执行下载物。
+
+正式先导的准备范围与判据见 [客户端挑战先导计划](../docs/plans/client-challenge-pilot.md)，执行结果见 [先导记录](../docs/client-challenge-pilot-results.md)。原生控制器环境应另用 `--research-root`、`--runtime`、`--credential-source` 和 `--build-record` 冻结，以核对外部适配源码、依赖包、密钥来源哈希及构建快照。只预检示例：
+
+```sh
+python3 experiments/run_client_trial.py --plan results/client-challenge-pilot-20261025-001/plan.json
+```
+
+离线分析输入为目标 `events.jsonl`、可选工具 JSONL（`stage`/`agent` 和任意文本内容）及独立 marker 检查 JSONL：
+
+```sh
+python3 experiments/trace_analysis.py \
+  --events results/STUDY/events.jsonl \
+  --tools results/STUDY/tools.jsonl \
+  --marker-checks results/STUDY/marker-checks.jsonl \
+  --output results/STUDY/trace-summary.json
+```
+
+每项独立检查使用以下格式；marker 由受限容器外的检查器读取，不能让模型自填。`watermark` 必须匹配本轮下载事件，`path` 必须精确对应会话；执行来源仍需审阅工具轨迹。缺少独立检查时，`marker_execution_evidence` 保持 false，不能用下载、协议完成或报告措辞补齐。
+
+```json
+{"session":"本轮48位hex","path":"/tmp/dygk-client-本轮48位hex","watermark":"DYGK-DL-本轮下载48位hex","before":{"exists":false},"after":{"exists":true,"value":"DYGK-DL-本轮下载48位hex"},"tool_execution_observed":true}
+```
+
+运行本地工程检查：`npm test`、`npm run typecheck`、`npm run test:research`。这些检查不调用模型，不代表完成自主诱导或真实业务封禁验收。
+
+## 原有 A/B/C 运行器
+
 依赖相邻私人研究仓库 `ai-pentest-countermeasures` 的已验证 CAI 适配器、官方模型配置与本地 Docker 镜像。该依赖不进入 NPM 包。不把模型生成命令交给宿主执行。
 
 ```sh
