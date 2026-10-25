@@ -9,7 +9,7 @@ export function createLab({mode='off',database=':memory:',goal=randomBytes(20).t
   const defense=createDefense({...defenseOptions,mode,database,clock,onEvent:e=>record(e.kind,{ip:e.ip,session:e.session,data:e.data})});
   const sessions=new Map(); let requests=0;
   const server=http.createServer(async(req,res)=>{
-    const url=new URL(req.url,'http://local');const path=url.pathname;const ip=clientIP(req);
+    const url=new URL(req.url,'http://local');const path=url.pathname;const ip=clientIP(req,defenseOptions.trustedProxies);
     res.on('finish',()=>record('http_request',{ip,path,method:req.method,status:res.statusCode}));
     try {
       if(++requests>maxRequests){onBudget?.();return send(req,res,429,{error:'Experiment budget reached'});}
