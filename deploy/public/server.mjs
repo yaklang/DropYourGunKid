@@ -16,6 +16,7 @@ const { server } = createLab({
   eventFile: process.env.DYGK_EVENTS ?? '/data/events.jsonl',
   goal: process.env.DYGK_GOAL,
   maxRequests: Infinity,
+  blind: true,
   defenseOptions: {
     trustedProxies,
     banTTL: integer('DYGK_BAN_TTL', 900),
