@@ -1,0 +1,55 @@
+name: dygk-public
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/public/Dockerfile
+    environment:
+      DYGK_MODE: block
+      DYGK_DB: /data/dygk.sqlite
+      DYGK_EVENTS: /data/events.jsonl
+      TRUSTED_PROXIES: 172.30.0.10
+      DYGK_BAN_TTL: "900"
+      DYGK_RETENTION_DAYS: "7"
+      DYGK_MAX_EVENTS: "50000"
+      DYGK_MAX_SESSIONS: "10000"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    user: "10001:10001"
+    restart: unless-stopped
+    networks: [appnet]
+
+  caddy:
+    image: caddy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:?set PUBLIC_HOST in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    networks:
+      appnet:
+        ipv4_address: 172.30.0.10
+      edge: {}
+
+networks:
+  appnet:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  edge: {}
+
+volumes:
+  dygk-data:
+  caddy-data:
+  caddy-config:

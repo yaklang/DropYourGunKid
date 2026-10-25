@@ -126,6 +126,10 @@ DYGK_LAB=1 DYGK_MODE=observe npm run demo
 
 原始模型轨迹、每轮目标值与真实网络信息只存 `results/`，不提交。所有封禁测试只作用于当前自有实验实例。
 
+## 公网合成蜜罐
+
+[部署配置](deploy/public/README.md) · [公网边界与检查](docs/public-deployment.md)：Caddy TLS + 内部只读 app；不启用客户端二进制或 `/gateway-check`。
+
 ## 独立网关容器
 
 ```sh
