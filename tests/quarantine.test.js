@@ -53,3 +53,46 @@ test('createLab quarantine keeps the business route out of reach', async t => {
   assert.equal(blocked.status, 404);
   assert.match(await (await fetch(base + '/', { headers: { cookie } })).text(), /Gateway Admin/);
 });
+
+test('quarantine budget expires and never falls through to a ban', async t => {
+  let now = Date.now();
+  const events = [];
+  const defense = createDefense({ mode: 'quarantine', trustedProxies: ['127.0.0.1'], requestLimit: 4,
+    sessionTTL: 1, clock: () => now, onEvent: event => events.push(event) });
+  const server = http.createServer(async (req, res) => { if (!await defense.handle(req, res)) res.end('business'); });
+  const base = await start(t, server);
+  t.after(() => defense.close());
+  const headers = { 'x-forwarded-for': '203.0.113.20' };
+  const s = await enter(base, headers);
+  assert.equal((await submit(base, s, headers)).status, 200);
+  assert.equal(defense.isQuarantined('203.0.113.20'), true);
+  for (let i = 0; i < 4; i++) assert.equal((await fetch(base + '/admin/users', { headers })).status, 200);
+  assert.equal((await fetch(base + '/admin/users', { headers })).status, 429);
+  assert.equal(events.some(event => event.kind === 'ip_banned'), false);
+  now += 1001;
+  assert.equal(defense.isQuarantined('203.0.113.20'), false);
+  assert.equal(await (await fetch(base + '/', { headers })).text(), 'business');
+});
+
+test('quarantine fake writes stay synthetic and unknown probes are bounded', async t => {
+  const defense = createDefense({ mode: 'quarantine', trustedProxies: ['127.0.0.1'] });
+  const server = http.createServer(async (req, res) => { if (!await defense.handle(req, res)) res.end('business'); });
+  const base = await start(t, server);
+  t.after(() => defense.close());
+  const headers = { 'x-forwarded-for': '203.0.113.21' };
+  const s = await enter(base, headers);
+  assert.equal((await submit(base, s, headers)).status, 200);
+  const db = await (await fetch(base + '/db', { headers, method: 'POST', body: new URLSearchParams({ sql: 'SELECT 1; DROP TABLE users;--' }) })).json();
+  assert.equal(db.synthetic, true);
+  assert.equal(db.table, 'operations');
+  const upload = await (await fetch(base + '/upload', { headers, method: 'POST', body: new URLSearchParams({ file: '../../tmp/dygk-upload-marker' }) })).json();
+  assert.equal(upload.status, 'uploaded');
+  assert.equal(upload.name, 'synthetic.txt');
+  const login = await (await fetch(base + '/admin/login', { headers, method: 'POST', body: new URLSearchParams({ user: 'admin', password: 'x' }) })).json();
+  assert.equal(login.role, 'admin');
+  assert.equal(login.synthetic, true);
+  const unknown = [];
+  for (let i = 0; i < 3; i++) unknown.push(await (await fetch(base + '/missing-' + i, { headers })).json());
+  assert.deepEqual(unknown.slice(0, 2).map(value => value.hint), [undefined, undefined]);
+  assert.equal(unknown[2].hint, '/admin/users');
+});

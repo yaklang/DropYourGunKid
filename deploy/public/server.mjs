@@ -19,6 +19,7 @@ const { server } = createLab({
   blind: true,
   defenseOptions: {
     trustedProxies,
+    requestLimit: 240,
     banTTL: integer('DYGK_BAN_TTL', 900),
     retentionDays: integer('DYGK_RETENTION_DAYS', 7),
     maxEvents: integer('DYGK_MAX_EVENTS', 50000),
