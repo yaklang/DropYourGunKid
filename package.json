@@ -35,7 +35,8 @@
     "demo": "node examples/operations/server.js",
     "test:browser": "node tests/browser.mjs",
     "pack:check": "npm pack --dry-run",
-    "test:research": "python3 -m unittest discover -s tests -p \"test_*.py\" -v && cd experiments/client && go test ./... && go vet ./..."
+    "test:research": "python3 -m unittest discover -s tests -p \"test_*.py\" -v && cd experiments/client && go test ./... && go vet ./...",
+    "test:adaptive": "node --test experiments/adaptive/server.test.mjs"
   },
   "repository": {
     "type": "git",
