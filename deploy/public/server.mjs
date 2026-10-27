@@ -7,7 +7,7 @@ const integer = (name, fallback) => {
 };
 const trustedProxies = (process.env.TRUSTED_PROXIES ?? '').split(',').map(value => value.trim()).filter(Boolean);
 const mode = process.env.DYGK_MODE ?? 'block';
-if (!['observe', 'block'].includes(mode)) throw new Error('DYGK_MODE must be observe or block');
+if (!['observe', 'block', 'quarantine'].includes(mode)) throw new Error('DYGK_MODE must be observe, block or quarantine');
 if (!trustedProxies.length) console.warn('TRUSTED_PROXIES is empty; all clients will appear as the proxy address');
 
 const { server } = createLab({

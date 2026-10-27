@@ -6,7 +6,7 @@ services:
       context: ../..
       dockerfile: deploy/public/Dockerfile
     environment:
-      DYGK_MODE: block
+      DYGK_MODE: quarantine
       DYGK_DB: /data/dygk.sqlite
       DYGK_EVENTS: /data/events.jsonl
       TRUSTED_PROXIES: 172.30.0.10

@@ -101,7 +101,7 @@ const defense = createDefense({
 
 三条件先导（9 次探索）见[执行记录](docs/client-challenge-pilot-results.md)；单次样本不提供成功率。
 
-有界自适应递归原型见[设计说明](docs/adaptive-honeypot.md)：命中后隔离到假后台，不直接封禁；节点、请求和会话都有上限，不执行命令、不出网。
+有界自适应递归蜜罐已作为 `createDefense` 的 `quarantine` 模式接入：命中后隔离到假后台，不直接封禁，真实业务路由不再执行；节点、请求和会话都有上限，不执行命令、不出网。设计与公开验证见[说明](docs/adaptive-honeypot.md)。
 
 ## 资源、隐私与管理
 
