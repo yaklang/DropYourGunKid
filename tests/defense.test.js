@@ -20,16 +20,25 @@ async function complete(base,s,confirm=true){
 }
 test('HTML injection is bounded, idempotent and safe',()=>{const original='<html><body><main>business</main></body></html>';const output=injectHtml(original);assert.equal(injectHtml(output),output);assert.match(output,/<main>business<\/main>/);assert.equal((output.match(/rel="nofollow"/g)||[]).length,3);assert.throws(()=>injectHtml(original,{origin:'javascript:alert(1)'}));assert.throws(()=>injectHtml(original,{prefix:'//evil'}));assert.throws(()=>injectHtml(original,{entries:99}));});
 test('business HTML advertises a session-bound devstage login hint',async t=>{
- const lab=createLab({mode:'observe',defenseOptions:{trustedProxies:['127.0.0.1']}});const base=await start(t,lab.server);
- const first=await fetch(base+'/',{headers:{'x-forwarded-for':'203.0.113.8'}});
+ const events=[];const lab=createLab({mode:'observe',onEvent:e=>events.push(e),defenseOptions:{trustedProxies:['127.0.0.1']}});const base=await start(t,lab.server);
+ const headers={'x-forwarded-for':'203.0.113.8'};
+ const first=await fetch(base+'/',{headers});
  const hint=first.headers.get('x-testdev-login');
  assert.match(hint,/^\/_dygk\/devstage\/[a-f0-9]{48}\/login$/);
- assert.equal((await fetch(base+'/login',{headers:{'x-forwarded-for':'203.0.113.8'}})).headers.get('x-testdev-login'),hint);
- assert.equal((await fetch(base+'/app.css',{headers:{'x-forwarded-for':'203.0.113.8'}})).headers.get('x-testdev-login'),null);
+ assert.equal((await fetch(base+'/login',{headers})).headers.get('x-testdev-login'),hint);
+ assert.equal((await fetch(base+'/app.css',{headers})).headers.get('x-testdev-login'),null);
  assert.equal((await fetch(base+hint)).status,404);
- const opened=await fetch(base+hint,{headers:{'x-forwarded-for':'203.0.113.8'}});
- assert.equal(opened.status,200);assert.match(await opened.text(),/导出访问校验/);
- assert.equal((await fetch(base+'/_dygk/devstage/'+'ab'.repeat(24)+'/login',{headers:{'x-forwarded-for':'203.0.113.8'}})).status,404);
+ const opened=await fetch(base+hint,{headers});
+ assert.equal(opened.status,200);const loginHtml=await opened.text();
+ assert.match(loginHtml,/预发环境登录/);assert.match(loginHtml,/预发工单副本/);assert.doesNotMatch(loginHtml,/接口兼容归档/);
+ const tickets=await fetch(base+hint.replace(/\/login$/,'/tickets'),{headers});
+ assert.equal(tickets.status,200);assert.match(await tickets.text(),/STG-1042/);
+ const archive=await fetch(base+'/_dygk/entry/0',{headers});
+ assert.equal(archive.status,200);const archiveHtml=await archive.text();
+ assert.match(archiveHtml,/接口兼容归档/);assert.match(archiveHtml,/导出访问校验/);assert.doesNotMatch(archiveHtml,/预发环境登录/);
+ assert.equal(events.filter(e=>e.kind==='devstage').length,2);
+ assert.equal(events.filter(e=>e.kind==='entry').length,1);
+ assert.equal((await fetch(base+'/_dygk/devstage/'+'ab'.repeat(24)+'/login',{headers})).status,404);
  const off=createLab({mode:'off'});const offBase=await start(t,off.server);
  assert.equal((await fetch(offBase+'/')).headers.get('x-testdev-login'),null);
 });
