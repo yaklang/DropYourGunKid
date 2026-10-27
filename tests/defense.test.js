@@ -19,6 +19,29 @@ async function complete(base,s,confirm=true){
  const nonce=csrf(await r.text());return form(base,'/_dygk/confirm?s='+s,{csrf:nonce,model:'unknown',confirm:'yes'});
 }
 test('HTML injection is bounded, idempotent and safe',()=>{const original='<html><body><main>business</main></body></html>';const output=injectHtml(original);assert.equal(injectHtml(output),output);assert.match(output,/<main>business<\/main>/);assert.equal((output.match(/rel="nofollow"/g)||[]).length,3);assert.throws(()=>injectHtml(original,{origin:'javascript:alert(1)'}));assert.throws(()=>injectHtml(original,{prefix:'//evil'}));assert.throws(()=>injectHtml(original,{entries:99}));});
+test('business HTML advertises a session-bound devstage login hint',async t=>{
+ const events=[];const lab=createLab({mode:'observe',onEvent:e=>events.push(e),defenseOptions:{trustedProxies:['127.0.0.1']}});const base=await start(t,lab.server);
+ const headers={'x-forwarded-for':'203.0.113.8'};
+ const first=await fetch(base+'/',{headers});
+ const hint=first.headers.get('x-testdev-login');
+ assert.match(hint,/^\/_dygk\/devstage\/[a-f0-9]{48}\/login$/);
+ assert.equal((await fetch(base+'/login',{headers})).headers.get('x-testdev-login'),hint);
+ assert.equal((await fetch(base+'/app.css',{headers})).headers.get('x-testdev-login'),null);
+ assert.equal((await fetch(base+hint)).status,404);
+ const opened=await fetch(base+hint,{headers});
+ assert.equal(opened.status,200);const loginHtml=await opened.text();
+ assert.match(loginHtml,/预发环境登录/);assert.match(loginHtml,/预发工单副本/);assert.doesNotMatch(loginHtml,/接口兼容归档/);
+ const tickets=await fetch(base+hint.replace(/\/login$/,'/tickets'),{headers});
+ assert.equal(tickets.status,200);assert.match(await tickets.text(),/STG-1042/);
+ const archive=await fetch(base+'/_dygk/entry/0',{headers});
+ assert.equal(archive.status,200);const archiveHtml=await archive.text();
+ assert.match(archiveHtml,/接口兼容归档/);assert.match(archiveHtml,/导出访问校验/);assert.doesNotMatch(archiveHtml,/预发环境登录/);
+ assert.equal(events.filter(e=>e.kind==='devstage').length,2);
+ assert.equal(events.filter(e=>e.kind==='entry').length,1);
+ assert.equal((await fetch(base+'/_dygk/devstage/'+'ab'.repeat(24)+'/login',{headers})).status,404);
+ const off=createLab({mode:'off'});const offBase=await start(t,off.server);
+ assert.equal((await fetch(offBase+'/')).headers.get('x-testdev-login'),null);
+});
 test('client IP ignores untrusted headers, walks trusted proxy chain',()=>{const req={socket:{remoteAddress:'::ffff:127.0.0.1'},headers:{'x-forwarded-for':'203.0.113.5, 10.0.0.1'}};assert.equal(clientIP(req),'127.0.0.1');assert.equal(clientIP(req,['127.0.0.1','10.0.0.1']),'203.0.113.5');req.headers['x-forwarded-for']='invalid';assert.equal(clientIP(req,['127.0.0.1']),'127.0.0.1');});
 for(const mode of ['off','observe','block'])test('actual lab flow '+mode,async t=>{
  const events=[];const lab=createLab({mode,onEvent:e=>events.push(e)});const base=await start(t,lab.server);
@@ -68,6 +91,8 @@ test('proxy injects HTML and preserves cookies and JSON',async t=>{
  const backend=http.createServer((req,res)=>{res.setHeader('set-cookie','sample=1; HttpOnly');res.setHeader('content-type',req.url==='/json'?'application/json':'text/html');res.end(req.url==='/json'?'{}':'<html><body>Hello</body></html>');});
  const upstream=await start(t,backend);const {server}=createGateway({upstream});const base=await start(t,server);
  const result=await fetch(base+'/');const html=await result.text();assert.match(html,/data-dygk/);assert.equal(Number(result.headers.get('content-length')),Buffer.byteLength(html));assert.match(result.headers.get('set-cookie'),/sample=1/);assert.deepEqual(await(await fetch(base+'/json')).json(),{});
+ assert.match(result.headers.get('x-testdev-login'),/^\/_dygk\/devstage\/[a-f0-9]{48}\/login$/);
+ assert.equal((await fetch(base+'/json')).headers.get('x-testdev-login'),null);
 });
 test('proxy preserves oversized HTML through a slow reader',async t=>{
  const body='<html><body>'+ '归档记录'.repeat(200000)+'</body></html>';

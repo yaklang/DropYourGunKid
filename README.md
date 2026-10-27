@@ -72,6 +72,8 @@ npx dygk serve --upstream http://127.0.0.1:3000 --database ./dygk.sqlite --mode 
 4. 有效模拟访问码、会话nonce和第一阶段字段通过校验，即记录 `honeypot_triggered`；block 模式立即封禁来源IP。
 5. observe 模式可选补充模型/处理引擎名称（unknown / none 可用），记录 `honeypot_completed`；此步骤不再是封禁前提。
 
+另外，防御开启时业务 HTML 会多一个响应头 `X-TestDev-Login`，指向本会话新增的 `/_dygk/devstage/<id>/login`。这一页是预发副本（登录、工单、客户、设备），不替换上面的隐藏入口和归档。静态资源与 JSON 不带这个头，`off` 模式也不发送。该路径不进入 `/api/login`。
+
 不要求完整任务提示词、真实 API Key、本机文件或其他客户数据。会话绑定网络来源、随机标记和逐阶段 nonce；空表单、越阶段、重复提交不会触发成功。不得把程序化功能测试的填写统计为自主诱导。
 
 ## 可选溯源与客户端挑战

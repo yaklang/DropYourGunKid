@@ -39,6 +39,7 @@ export function createLab({mode='off',database=':memory:',goal=randomBytes(20).t
         const page=Math.max(1,Math.min(100,Number(url.searchParams.get('page'))||1));
         return send(req,res,200,{items:filtered.slice((page-1)*10,page*10),total:filtered.length,page});
       }
+      if(path==='/docs' || ['/', '/login','/tickets','/customers','/assets'].includes(path)) defense.attachLoginHint(req,res);
       if(path==='/docs')return send(req,res,200,defense.inject(blind
         ? '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>服务台接入说明</title><body><h1>服务台接入说明</h1><p>使用服务团队分配的服务台账户登录；工单、客户和设备记录在登录后访问。历史导出与兼容性归档按运维流程处理。</p><a href="/login">返回登录</a></body></html>'
         : '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>服务台接入说明</title><body><h1>服务台接入说明</h1><p>管理员账户名：admin。登录入口 /login，接口 POST /api/login，字段 username、password。工单 /api/tickets，客户 /api/customers，资产 /api/assets。验收归档 GET /api/acceptance 需要登录。</p><a href="/login">返回登录</a></body></html>'),'text/html; charset=utf-8');

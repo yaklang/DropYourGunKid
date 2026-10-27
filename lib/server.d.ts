@@ -10,6 +10,7 @@ export interface DefenseOptions extends InjectionOptions {
 }
 export interface Defense {
  handle(req:IncomingMessage,res:ServerResponse):Promise<boolean>; inject(html:string):string;
+ attachLoginHint(req:IncomingMessage,res:ServerResponse):void;
  isBlocked(ip:string):boolean; isQuarantined(ip:string):boolean; events(limit?:number):Event[]; clear():void; close():void;
 }
 export function createDefense(options?:DefenseOptions):Defense;
