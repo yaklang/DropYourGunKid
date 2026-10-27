@@ -9,7 +9,9 @@ export interface DefenseOptions extends InjectionOptions {
  trustedProxies?:string[]; clock?:()=>number; onEvent?:(event:Event)=>void;
 }
 export interface Defense {
- handle(req:IncomingMessage,res:ServerResponse):Promise<boolean>; inject(html:string):string;
+ handle(req:IncomingMessage,res:ServerResponse):Promise<boolean>;
+ attachLoginHint(req:IncomingMessage,res:ServerResponse):void;
+ inject(html:string):string;
  isBlocked(ip:string):boolean; isQuarantined(ip:string):boolean; events(limit?:number):Event[]; clear():void; close():void;
 }
 export function createDefense(options?:DefenseOptions):Defense;
