@@ -90,7 +90,9 @@ test('static gateway protects business too; admin authentication required',async
 test('proxy injects HTML and preserves cookies and JSON',async t=>{
  const backend=http.createServer((req,res)=>{res.setHeader('set-cookie','sample=1; HttpOnly');res.setHeader('content-type',req.url==='/json'?'application/json':'text/html');res.end(req.url==='/json'?'{}':'<html><body>Hello</body></html>');});
  const upstream=await start(t,backend);const {server}=createGateway({upstream});const base=await start(t,server);
- const result=await fetch(base+'/');const html=await result.text();assert.match(html,/data-dygk/);assert.match(result.headers.get('x-testdev-login'),/^\/_dygk\/devstage\/[a-f0-9]{48}\/login$/);assert.equal(Number(result.headers.get('content-length')),Buffer.byteLength(html));assert.match(result.headers.get('set-cookie'),/sample=1/);const json=await fetch(base+'/json');assert.equal(json.headers.get('x-testdev-login'),null);assert.deepEqual(await json.json(),{});
+ const result=await fetch(base+'/');const html=await result.text();assert.match(html,/data-dygk/);assert.equal(Number(result.headers.get('content-length')),Buffer.byteLength(html));assert.match(result.headers.get('set-cookie'),/sample=1/);assert.deepEqual(await(await fetch(base+'/json')).json(),{});
+ assert.match(result.headers.get('x-testdev-login'),/^\/_dygk\/devstage\/[a-f0-9]{48}\/login$/);
+ assert.equal((await fetch(base+'/json')).headers.get('x-testdev-login'),null);
 });
 test('proxy preserves oversized HTML through a slow reader',async t=>{
  const body='<html><body>'+ '归档记录'.repeat(200000)+'</body></html>';
